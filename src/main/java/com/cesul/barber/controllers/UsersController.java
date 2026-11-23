@@ -8,16 +8,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/users")
 @Tag(name = "Usuários", description = "Gerenciamento de usuários da barbearia")
 public class UsersController {
 
-    private List<UserCreationDTO> users = new ArrayList<>();
-
-    private UsersService usersService;
+    private final UsersService usersService;
 
     public UsersController(UsersService usersService) {
         this.usersService = usersService;
@@ -29,17 +29,12 @@ public class UsersController {
         return ResponseEntity.ok(this.usersService.findAll());
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<UserCreationDTO> update(@PathVariable UUID id, @RequestBody UserCreationDTO updatedUser) {
-        for (int i = 0; i < users.size(); i++) {
-            if (users.get(i).getId().equals(id)) {
-                updatedUser.setId(id);
-                users.set(i, updatedUser);
-                return ResponseEntity.ok(updatedUser);
-            }
-        }
-
-        return ResponseEntity.notFound().build();
+    @GetMapping("/{id}")
+    @Operation(summary = "Buscar por ID", description = "Retorna o utilizador correspondente ao ID.")
+    public ResponseEntity<UserCreationDTO> getById(@PathVariable UUID id) {
+        return this.usersService.findById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping
@@ -50,35 +45,29 @@ public class UsersController {
         return ResponseEntity.status(HttpStatus.CREATED).body(newUser);
     }
 
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualizar utilizador", description = "Atualiza nome, e-mail e/ou avatar do utilizador.")
+    public ResponseEntity<UserCreationDTO> update(@PathVariable UUID id, @RequestBody Map<String, String> request) {
+        return this.usersService.update(id, request)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @PatchMapping("/{id}/avatar")
     @Operation(
             summary = "Atualizar Avatar",
             description = "Atualiza exclusivamente a imagem de perfil do utilizador. Ignora outros campos."
     )
-    public ResponseEntity<UserCreationDTO> patchUser(@PathVariable UUID id, @RequestBody Map<String, Object> avatar) {
-        Optional<UserCreationDTO> userOptional = users.stream()
-                .filter(u -> u.getId().equals(id))
-                .findFirst();
-
-        if (userOptional.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        UserCreationDTO existingUser = userOptional.get();
-
-        if (avatar.containsKey("avatarUrl")) {
-            existingUser.setAvatarUrl((String) avatar.get("avatarUrl"));
-        }
-
-        return ResponseEntity.ok(existingUser);
+    public ResponseEntity<UserCreationDTO> patchUser(@PathVariable UUID id, @RequestBody Map<String, String> avatar) {
+        return this.usersService.updateAvatar(id, avatar)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deletar utilizador", description = "Remove o utilizador correspondente ao ID da lista.")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        boolean removed = users.removeIf(u -> u.getId().equals(id));
-
-        if (removed) {
+        if (this.usersService.delete(id)) {
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.notFound().build();
@@ -87,7 +76,7 @@ public class UsersController {
     @DeleteMapping("/clear")
     @Operation(summary = "Limpar utilizadores", description = "Limpa a lista em memória (Útil para reiniciar os testes durante a aula).")
     public ResponseEntity<Void> clearUsers() {
-        this.users.clear();
+        this.usersService.clear();
         return ResponseEntity.noContent().build();
     }
 }
